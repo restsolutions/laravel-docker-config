@@ -1,0 +1,80 @@
+version: '3.9'
+
+networks:
+  nginxx:
+
+services:
+  nginx:
+    container_name: nginx_nginx
+    build:
+      context: ./docker/nginx
+    networks:
+      - nginxx
+    ports:
+      - "${HTTP_PORT}:80"
+#      - "${HTTPS_PORT}:443"
+    volumes:
+      - ./src:/var/www/html:delegated
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+    restart: unless-stopped
+    tty: true
+
+  php:
+    build:
+      context: ./docker/php
+    networks:
+      - nginxx
+    container_name: nginx_php
+    volumes:
+      - ./src:/var/www/html:delegated
+    ports:
+      - "${PHP_PORT}:9000"
+    restart: unless-stopped
+    tty: true
+  
+  mysql:
+    image: mysql:8.0
+    container_name: nginx_mysql
+    networks:
+      - nginxx
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    restart: unless-stopped
+    tty: true
+    ports:
+      - '${DB_PORT:-3306}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_DATABASE: '${DB_DATABASE}'
+      MYSQL_USER: '${DB_USERNAME}'
+      MYSQL_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'no'
+      SERVICE_NAME: '${DB_CONNECTION}'
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+      retries: 3
+      timeout: 5s
+  
+  phpmyadmin:
+    image: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - '${MY_PORT}:80'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+      PMA_PORT: '${DB_PORT}'
+      PMA_HOST: '${DB_CONNECTION}'
+      PMA_USER: '${DB_USERNAME}'
+      PMA_PASSWORD: '${DB_PASSWORD}'
+    networks:
+      - nginxx
+    depends_on:
+      - mysql
+    container_name: nginx_phpmyadmin
+
+volumes:
+  data:
+    driver: local
